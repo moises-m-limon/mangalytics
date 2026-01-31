@@ -18,18 +18,23 @@ class SupabaseDB:
         self.client: Client = create_client(supabase_url, supabase_key)
         self.bucket_documents = os.getenv("SUPABASE_BUCKET", "documents")
         self.bucket_images = "reducto-images"
+        self.bucket_panels = "panels"
 
     async def insert_recommendation_request(
         self,
         email: str,
         topic: str,
-        file_name: str
+        file_name: str,
+        title: str = None,
+        authors: str = None
     ) -> str:
         """Insert a recommendation request and return the request_id"""
         result = self.client.table("recommendation_requests").insert({
             "email": email,
             "topic": topic,
-            "file_name": file_name
+            "file_name": file_name,
+            "title": title,
+            "authors": authors
         }).execute()
 
         return result.data[0]["id"]
@@ -37,14 +42,15 @@ class SupabaseDB:
     async def insert_recommendation_pairings(
         self,
         request_id: str,
-        pairings: List[Dict[str, str]]
+        pairings: List[Dict[str, Any]]
     ) -> None:
-        """Insert multiple recommendation pairings"""
+        """Insert multiple recommendation pairings with Reducto data"""
         records = [
             {
                 "request_id": request_id,
                 "figure_content": pairing["figure_content"],
-                "image_path": pairing["image_path"]
+                "image_path": pairing["image_path"],
+                "reducto_data": pairing.get("reducto_block")  # Store full Reducto block data
             }
             for pairing in pairings
         ]
@@ -100,6 +106,43 @@ class SupabaseDB:
         except Exception as e:
             print(f"Error listing files in {path}: {str(e)}")
             return []
+
+    def upload_manga_panels(
+        self,
+        file_path: str,
+        content: str,
+        content_type: str = "application/json"
+    ) -> str:
+        """
+        Upload manga panels JSON to Supabase panels bucket
+
+        Args:
+            file_path: Path in format "email/topic/date/filename.json"
+            content: JSON string or text content
+            content_type: MIME type (default: application/json)
+
+        Returns:
+            The file path in storage
+        """
+        try:
+            # Convert string to bytes
+            content_bytes = content.encode('utf-8')
+
+            self.client.storage.from_(self.bucket_panels).upload(
+                file_path,
+                content_bytes,
+                {"content-type": content_type}
+            )
+            print(f"✓ Uploaded manga panels to {file_path}")
+            return file_path
+        except Exception as e:
+            print(f"✗ Error uploading manga panels: {str(e)}")
+            raise
+
+    def get_panels_public_url(self, file_path: str) -> str:
+        """Get public URL for manga panels in panels bucket"""
+        result = self.client.storage.from_(self.bucket_panels).get_public_url(file_path)
+        return result
 
 
 supabase_db = SupabaseDB()

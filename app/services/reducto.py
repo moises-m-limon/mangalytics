@@ -19,12 +19,12 @@ class ReductoService:
             "Authorization": f"Bearer {self.api_key}"
         }
 
-    async def process_pdf(self, pdf_bytes: bytes, file_name: str) -> List[Dict[str, Any]]:
+    async def process_pdf(self, pdf_bytes: bytes, file_name: str) -> Dict[str, Any]:
         """
-        Process PDF with Reducto API and extract figures with text
+        Process PDF with Reducto API and extract title, authors, and figures
 
         Returns:
-            List of dicts with 'figure_content' (text) and 'image_data' (bytes)
+            Dict with 'title', 'authors', and 'pairings' (list of figure dicts)
         """
         # Step 1: Upload the PDF file
         upload_response = requests.post(
@@ -117,8 +117,10 @@ class ReductoService:
                     parse_data = status_data
                     break
 
-        # Extract figures and their associated text
+        # Extract title, authors, and figures from Reducto response
         pairings = []
+        title = None
+        authors = None
 
         # Parse the result structure based on Reducto API response
         # Structure: result -> chunks -> blocks
@@ -127,6 +129,26 @@ class ReductoService:
 
         figure_counter = 1
 
+        # First pass: extract title and authors from the beginning of the document
+        for chunk in chunks:
+            blocks = chunk.get("blocks", [])
+
+            for i, block in enumerate(blocks):
+                block_type = block.get("type", "")
+
+                # Extract title
+                if block_type == "Title" and not title:
+                    title = block.get("content", "").strip()
+
+                    # Look for authors in the next Text block
+                    if i + 1 < len(blocks) and blocks[i + 1].get("type") == "Text":
+                        authors = blocks[i + 1].get("content", "").strip()
+                    break
+
+            if title and authors:
+                break
+
+        # Second pass: extract figures
         for chunk in chunks:
             blocks = chunk.get("blocks", [])
 
@@ -158,12 +180,20 @@ class ReductoService:
                     if image_data:
                         pairings.append({
                             "figure_content": figure_content,
-                            "image_data": image_data
+                            "image_data": image_data,
+                            "reducto_block": block  # Store full block data from Reducto
                         })
                         print(f"✓ Extracted figure {figure_counter} with {len(figure_content)} chars of content")
                         figure_counter += 1
 
-        return pairings
+        print(f"✓ Extracted title: {title}")
+        print(f"✓ Extracted authors: {authors}")
+
+        return {
+            "title": title,
+            "authors": authors,
+            "pairings": pairings
+        }
 
 
 reducto_service = ReductoService()

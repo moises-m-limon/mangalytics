@@ -51,3 +51,31 @@ class RecommendationResponse(BaseModel):
     date: str
     total_files_processed: int
     files: List[FileRecommendation]
+
+
+class MangaGenerationRequest(BaseModel):
+    """Request model for manga generation endpoint"""
+    email: EmailStr
+    topic: str
+    date: str
+    max_files: int = 1  # Default to 1 file for manga generation
+    paper_title: Optional[str] = None
+
+
+class MangaPanel(BaseModel):
+    """Model for a single manga panel"""
+    panel_number: str
+    title: Optional[str] = None
+    description: Optional[str] = None
+    dialogue: Optional[str] = None
+
+
+class MangaGenerationResponse(BaseModel):
+    """Response model for manga generation"""
+    email: str
+    topic: str
+    narrative: str
+    panels: List[MangaPanel]
+    figures_used: int
+    email_sent: bool
+    email_id: Optional[str] = None

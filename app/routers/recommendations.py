@@ -62,13 +62,17 @@ async def create_recommendation(request: RecommendationRequest):
                 # Process with Reducto
                 print("Processing with Reducto...")
                 try:
-                    reducto_pairings = await reducto_service.process_pdf(
+                    reducto_result = await reducto_service.process_pdf(
                         pdf_bytes,
                         file_path
                     )
                 except Exception as e:
                     print(f"✗ Reducto processing failed for {file_path}: {str(e)}")
                     continue
+
+                title = reducto_result.get("title")
+                authors = reducto_result.get("authors")
+                reducto_pairings = reducto_result.get("pairings", [])
 
                 if not reducto_pairings:
                     print(f"No figures found in {file_path}")
@@ -81,7 +85,9 @@ async def create_recommendation(request: RecommendationRequest):
                     request_id = await supabase_db.insert_recommendation_request(
                         email=request.email,
                         topic=request.topic,
-                        file_name=file_path
+                        file_name=file_path,
+                        title=title,
+                        authors=authors
                     )
                 except Exception as e:
                     print(f"✗ Failed to insert request for {file_path}: {str(e)}")
@@ -103,7 +109,8 @@ async def create_recommendation(request: RecommendationRequest):
 
                         db_pairings.append({
                             "figure_content": pairing["figure_content"],
-                            "image_path": image_path
+                            "image_path": image_path,
+                            "reducto_block": pairing.get("reducto_block")  # Include full Reducto block data
                         })
 
                         # Get public URL for response

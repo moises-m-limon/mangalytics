@@ -3,6 +3,8 @@
 A FastAPI application that:
 1. Scrapes arXiv search results using Firecrawl and uploads PDFs to Supabase storage
 2. Processes PDFs with Reducto to extract figures and stores them in a normalized database structure
+3. Generates manga-style narratives from research figures using Gemini AI
+4. Sends beautiful email digests with a friendly corgi guide via Resend
 
 ## Features
 
@@ -13,6 +15,11 @@ A FastAPI application that:
 - Reducto integration for PDF processing and figure extraction
 - Normalized database schema for recommendation tracking
 - Automatic image storage in Supabase with public URLs
+- **NEW: Manga generation with Gemini AI using nano-banana technique**
+- **NEW: Friendly corgi avatar as research guide/narrator**
+- **NEW: Email delivery via Resend with beautiful HTML formatting**
+- **NEW: Visual PNG panel generation with custom styling**
+- **NEW: Automatic upload to Supabase panels bucket**
 
 ## Setup
 
@@ -43,6 +50,7 @@ pip install -r requirements.txt
    - Run the SQL migrations in `db_migrations.sql`
    - Create bucket `documents` (for PDFs)
    - Create bucket `reducto-images` (for extracted figures)
+   - Create bucket `panels` (for manga panel images)
 
 ### Option 2: Using pip/venv
 
