@@ -17,7 +17,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
-COPY main.py .
+COPY app/ ./app/
 COPY .env .
 
 # Create non-root user for security
@@ -33,4 +33,4 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8080/', timeout=2)"
 
 # Run the application
-CMD exec uvicorn main:app --host 0.0.0.0 --port ${PORT}
+CMD exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT}
