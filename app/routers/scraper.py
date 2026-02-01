@@ -78,21 +78,31 @@ async def scrape_and_upload(params: SearchParams):
                 if not paper_id:
                     paper_id = f"paper_{idx}"
 
+                file_path = f"{params.email}/{params.topic}/{current_date}/{paper_id}.pdf"
+
                 print(f"Downloading {idx}/5: {pdf_url}")
 
                 response = requests.get(pdf_url, timeout=30)
                 response.raise_for_status()
 
-                file_path = f"{params.email}/{params.topic}/{current_date}/{paper_id}.pdf"
+                try:
+                    supabase_db.client.storage.from_(supabase_db.bucket_documents).upload(
+                        file_path,
+                        response.content,
+                        {"content-type": "application/pdf"}
+                    )
+                    print(f"✓ Uploaded: {file_path}")
+                except Exception as upload_error:
+                    # Check if it's a duplicate error (409)
+                    error_str = str(upload_error)
+                    if "409" in error_str or "Duplicate" in error_str or "already exists" in error_str:
+                        print(f"⚠ PDF already exists: {file_path}, skipping")
+                    else:
+                        # For other errors, re-raise
+                        raise
 
-                supabase_db.client.storage.from_(supabase_db.bucket_documents).upload(
-                    file_path,
-                    response.content,
-                    {"content-type": "application/pdf"}
-                )
-
+                # Add to uploaded files list (whether new or existing)
                 uploaded_files.append(file_path)
-                print(f"✓ Uploaded: {file_path}")
 
             except Exception as e:
                 error_msg = f"Failed to process {pdf_url}: {str(e)}"
