@@ -18,6 +18,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy application code
 COPY app/ ./app/
+COPY corgis.png .
+COPY logo.png .
 COPY .env .
 
 # Create non-root user for security

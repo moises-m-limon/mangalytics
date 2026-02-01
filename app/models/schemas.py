@@ -28,7 +28,7 @@ class RecommendationRequest(BaseModel):
     email: EmailStr
     topic: str
     date: str
-    max_files: int = 3  # Default to processing 3 files
+    max_files: int = 1  # Default to processing 1 file
 
 
 class FigurePairing(BaseModel):
@@ -79,3 +79,9 @@ class MangaGenerationResponse(BaseModel):
     figures_used: int
     email_sent: bool
     email_id: Optional[str] = None
+
+
+class SubscriptionRequest(BaseModel):
+    """Request model for frontend subscription"""
+    email: EmailStr
+    topic: str

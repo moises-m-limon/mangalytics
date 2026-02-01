@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from dotenv import load_dotenv
 import os
 
-from app.routers import scraper, recommendations, manga
+from app.routers import scraper, recommendations, manga, subscriptions
 
 load_dotenv()
 
@@ -32,6 +32,7 @@ async def root():
 app.include_router(scraper.router)
 app.include_router(recommendations.router)
 app.include_router(manga.router)
+app.include_router(subscriptions.router)
 
 
 if __name__ == "__main__":

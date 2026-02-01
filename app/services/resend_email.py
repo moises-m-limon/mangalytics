@@ -15,6 +15,10 @@ class ResendService:
 
         resend.api_key = self.api_key
 
+        # Get from email from env or use default
+        # For production, verify a domain at resend.com/domains
+        self.from_email = os.getenv("RESEND_FROM_EMAIL", "mangalytics <onboarding@resend.dev>")
+
     async def send_manga_email(
         self,
         to_email: str,
@@ -93,7 +97,7 @@ class ResendService:
 
             # Send email via Resend
             email_data = {
-                "from": "mangalytics <onboarding@resend.dev>",  # Update with your verified domain
+                "from": self.from_email,
                 "to": [to_email],
                 "subject": f"your manga research digest: {topic}",
                 "html": html_content,
@@ -125,48 +129,76 @@ class ResendService:
         corgi_avatar_base64: str = None,
         panel_images_base64: List[Dict[str, str]] = None
     ) -> str:
-        """Build HTML email content with manga styling and corgi avatar"""
+        """Build HTML email content with black and white manga styling"""
 
-        # Build corgi avatar HTML
+        # Load logo for footer
+        logo_base64 = None
+        try:
+            logo_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "logo.png")
+            with open(logo_path, 'rb') as f:
+                logo_bytes = f.read()
+                logo_base64 = base64.b64encode(logo_bytes).decode('utf-8')
+        except Exception as e:
+            print(f"Warning: Could not load logo: {e}")
+
+        # Build corgi avatar HTML with black and white styling
         corgi_html = ""
         if corgi_avatar_base64:
             corgi_html = f"""
-            <div style="text-align: center; margin: 20px 0;">
+            <div style="text-align: center; margin: 30px 0;">
                 <img src="data:image/png;base64,{corgi_avatar_base64}"
                      alt="corgi guide"
-                     style="width: 150px; height: auto; border-radius: 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-                <p style="margin: 10px 0 0 0; font-size: 14px; color: #7f8c8d; font-style: italic;">
+                     style="
+                         width: 200px;
+                         height: auto;
+                         border: 6px solid #000;
+                         background: #fff;
+                         padding: 10px;
+                         filter: grayscale(100%);
+                     ">
+                <p style="
+                     margin: 15px 0 0 0;
+                     font-size: 16px;
+                     color: #000;
+                     font-weight: bold;
+                     font-family: monospace;
+                     text-transform: lowercase;
+                 ">
                     your friendly research guide
                 </p>
             </div>
             """
 
-        # Build panels HTML
+        # Build panels HTML with black and white manga styling
         panels_html = ""
 
         # If we have panel images, display them from Supabase public URLs
         if panel_images_base64 and len(panel_images_base64) > 0:
             for i, panel_img in enumerate(panel_images_base64, 1):
-                # Use Supabase public URL instead of base64
+                # Use Supabase public URL for the panel image
                 img_url = panel_img.get('url', '')
                 panels_html += f"""
                 <div style="
-                    margin: 30px 0;
-                    text-align: center;
+                    margin: 40px 0;
+                    padding: 0;
+                    background: #fff;
+                    border: 6px solid #000;
+                    box-sizing: border-box;
                 ">
                     <img src="{img_url}"
-                         alt="Panel {i}"
+                         alt="Manga Panel {i}"
                          style="
-                            max-width: 100%;
+                            width: 100%;
                             height: auto;
-                            border: 8px solid #000;
-                            border-radius: 10px;
-                            box-shadow: 10px 10px 0px rgba(0,0,0,0.3);
+                            display: block;
+                            margin: 0;
+                            padding: 0;
+                            filter: grayscale(100%) contrast(110%);
                          ">
                 </div>
                 """
         else:
-            # Fallback to text-based panels if no images
+            # Fallback to text-based panels if no images (black and white styling)
             for i, panel in enumerate(panels, 1):
                 title = panel.get('title', f'Panel {i}')
                 description = panel.get('description', '')
@@ -174,29 +206,49 @@ class ResendService:
 
                 panels_html += f"""
                 <div style="
-                    margin: 20px 0;
+                    margin: 30px 0;
                     padding: 20px;
-                    border: 3px solid #000;
-                    border-radius: 10px;
+                    border: 6px solid #000;
                     background: #fff;
-                    box-shadow: 5px 5px 0px #000;
                 ">
                     <h3 style="
-                        margin: 0 0 10px 0;
+                        margin: 0 0 15px 0;
                         font-size: 24px;
                         font-weight: bold;
-                        color: #e74c3c;
+                        color: #000;
                         text-transform: uppercase;
-                    ">Panel {i}: {title}</h3>
+                        font-family: monospace;
+                        border-bottom: 3px solid #000;
+                        padding-bottom: 10px;
+                    ">panel {i}: {title}</h3>
                     <p style="
                         font-size: 16px;
                         line-height: 1.6;
-                        margin: 10px 0;
-                        color: #333;
-                    "><strong>Scene:</strong> {description}</p>
-                    {f'<div style="margin: 15px 0; padding: 15px; background: #fff3cd; border: 2px solid #ffc107; border-radius: 8px; position: relative;"><div style="font-size: 12px; color: #856404; font-weight: bold; margin-bottom: 5px;">CORGI SAYS:</div><p style="font-size: 16px; margin: 0; color: #856404; font-style: italic; line-height: 1.5;">{dialogue}</p></div>' if dialogue else ''}
+                        margin: 15px 0;
+                        color: #000;
+                        font-family: monospace;
+                    "><strong>scene:</strong> {description}</p>
+                    {f'<div style="margin: 15px 0; padding: 15px; background: #fff; border: 3px solid #000;"><div style="font-size: 12px; color: #000; font-weight: bold; margin-bottom: 5px; font-family: monospace;">corgi says:</div><p style="font-size: 16px; margin: 0; color: #000; font-style: italic; line-height: 1.5; font-family: monospace;">{dialogue}</p></div>' if dialogue else ''}
                 </div>
                 """
+
+        # Build logo section for footer
+        logo_html = ""
+        if logo_base64:
+            logo_html = f"""
+            <div style="text-align: center; margin: 40px 0 20px 0;">
+                <img src="data:image/png;base64,{logo_base64}"
+                     alt="mangalytics logo"
+                     style="
+                         width: 150px;
+                         height: auto;
+                         filter: grayscale(100%);
+                         border: 4px solid #000;
+                         background: #fff;
+                         padding: 10px;
+                     ">
+            </div>
+            """
 
         html = f"""
         <!DOCTYPE html>
@@ -205,71 +257,107 @@ class ResendService:
             <meta charset="UTF-8">
             <style>
                 body {{
-                    font-family: 'Arial', 'Comic Sans MS', sans-serif;
-                    background: #f9f9f9;
+                    font-family: monospace, 'Courier New', Arial, sans-serif;
+                    background: #fff;
                     padding: 20px;
+                    margin: 0;
                 }}
                 .container {{
-                    max-width: 800px;
+                    max-width: 900px;
                     margin: 0 auto;
-                    background: white;
-                    padding: 30px;
-                    border-radius: 15px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    background: #fff;
+                    border: 8px solid #000;
+                    padding: 0;
                 }}
                 .header {{
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
+                    background: #000;
+                    color: #fff;
                     padding: 30px;
-                    border-radius: 10px;
-                    margin-bottom: 30px;
                     text-align: center;
+                    border-bottom: 6px solid #000;
                 }}
-                .manga-badge {{
-                    display: inline-block;
-                    background: #ff6b6b;
-                    color: white;
-                    padding: 5px 15px;
-                    border-radius: 20px;
-                    font-size: 12px;
-                    font-weight: bold;
-                    margin-bottom: 10px;
+                .content {{
+                    padding: 30px;
+                    background: #fff;
                 }}
             </style>
         </head>
         <body>
             <div class="container">
                 <div class="header">
-                    <div class="manga-badge">MANGA DIGEST</div>
-                    <h1 style="margin: 10px 0; font-size: 32px;">mangalytics research</h1>
-                    <p style="margin: 0; font-size: 18px; opacity: 0.9;">topic: {topic}</p>
+                    <div style="
+                        display: inline-block;
+                        background: #fff;
+                        color: #000;
+                        padding: 8px 20px;
+                        font-size: 14px;
+                        font-weight: bold;
+                        margin-bottom: 15px;
+                        border: 3px solid #fff;
+                    ">manga digest</div>
+                    <h1 style="
+                        margin: 10px 0;
+                        font-size: 36px;
+                        text-transform: lowercase;
+                        letter-spacing: 2px;
+                    ">mangalytics</h1>
+                    <p style="
+                        margin: 5px 0 0 0;
+                        font-size: 16px;
+                        text-transform: lowercase;
+                    ">topic: {topic}</p>
                 </div>
 
-                {corgi_html}
+                <div class="content">
+                    {corgi_html}
 
-                <div style="margin: 30px 0;">
-                    <h2 style="
-                        color: #2c3e50;
-                        border-bottom: 3px solid #3498db;
-                        padding-bottom: 10px;
-                        font-size: 28px;
-                    ">your manga story</h2>
+                    <div style="margin: 40px 0 20px 0;">
+                        <h2 style="
+                            color: #000;
+                            border-bottom: 4px solid #000;
+                            padding-bottom: 10px;
+                            font-size: 24px;
+                            text-transform: lowercase;
+                            font-weight: bold;
+                        ">your manga story</h2>
+                    </div>
+
                     {panels_html}
-                </div>
 
-                <div style="
-                    margin-top: 40px;
-                    padding: 20px;
-                    background: #ecf0f1;
-                    border-radius: 10px;
-                    text-align: center;
-                ">
-                    <p style="margin: 0; color: #7f8c8d; font-size: 14px;">
-                        generated by mangalytics • powered by gemini ai & reducto
-                    </p>
-                    <p style="margin: 10px 0 0 0; color: #95a5a6; font-size: 12px;">
-                        check your attachments for the original research figures
-                    </p>
+                    {logo_html}
+
+                    <div style="
+                        margin-top: 40px;
+                        padding: 25px;
+                        background: #000;
+                        color: #fff;
+                        text-align: center;
+                        border: 6px solid #000;
+                    ">
+                        <p style="
+                            margin: 0 0 15px 0;
+                            font-size: 14px;
+                            text-transform: lowercase;
+                            font-weight: bold;
+                        ">
+                            special thanks to:
+                        </p>
+                        <p style="
+                            margin: 5px 0;
+                            font-size: 13px;
+                            text-transform: lowercase;
+                        ">
+                            • reducto • firecrawl • lovable • resend •
+                        </p>
+                        <p style="
+                            margin: 20px 0 0 0;
+                            font-size: 12px;
+                            text-transform: lowercase;
+                            opacity: 0.8;
+                        ">
+                            generated by mangalytics • powered by gemini ai
+                        </p>
+                    </div>
                 </div>
             </div>
         </body>

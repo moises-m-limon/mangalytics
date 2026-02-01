@@ -79,13 +79,64 @@ export default function Home() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white px-4 py-12">
-      <div className="max-w-xl w-full border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
+    <>
+      {/* Loading Screen Overlay */}
+      {loading && (
+        <div className="fixed inset-0 bg-white z-50 flex items-center justify-center">
+          <div className="max-w-md w-full px-8 text-center">
+            {/* Animated Corgi */}
+            <div className="w-64 h-64 mx-auto mb-8">
+              <CorgiRive />
+            </div>
+
+            {/* Loading Text */}
+            <h2 className="text-3xl font-bold text-black mb-4 uppercase tracking-wider">
+              preparing your manga...
+            </h2>
+
+            <div className="space-y-4 text-left mb-8">
+              <div className="flex items-center gap-4 p-3 border-2 border-black bg-white">
+                <div className="w-6 h-6 border-3 border-black border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                <p className="text-sm font-bold text-black uppercase tracking-wide">scraping latest papers</p>
+              </div>
+              <div className="flex items-center gap-4 p-3 border-2 border-black bg-white">
+                <div className="w-6 h-6 border-3 border-black border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                <p className="text-sm font-bold text-black uppercase tracking-wide">extracting figures</p>
+              </div>
+              <div className="flex items-center gap-4 p-3 border-2 border-black bg-white">
+                <div className="w-6 h-6 border-3 border-black border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                <p className="text-sm font-bold text-black uppercase tracking-wide">generating manga</p>
+              </div>
+              <div className="flex items-center gap-4 p-3 border-2 border-black bg-white">
+                <div className="w-6 h-6 border-3 border-black border-t-transparent rounded-full animate-spin flex-shrink-0"></div>
+                <p className="text-sm font-bold text-black uppercase tracking-wide">sending email</p>
+              </div>
+            </div>
+
+            <div className="border-3 border-black bg-black p-4 animate-pulse">
+              <p className="text-xs text-white font-bold text-center uppercase tracking-wider">
+                ⏱️ this takes 1-3 minutes • please wait
+              </p>
+            </div>
+
+            <p className="text-xs text-black font-medium text-center mt-4 opacity-60">
+              we&apos;re creating your personalized manga research digest...
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* Main Content */}
+      <div className="min-h-screen flex items-center justify-center bg-white px-4 py-12">
+        <div className="max-w-xl w-full border-4 border-black p-8 shadow-[8px_8px_0px_0px_rgba(0,0,0,1)]">
         {/* Title */}
-        
+        <h1 className="text-4xl font-bold text-center text-black mb-4 uppercase tracking-wider">
+          mangalytics
+        </h1>
+
         {/* Subtitle */}
-        <p className="text-lg text-center text-black mb-6">
-          research papers as manga, delivered to your inbox
+        <p className="text-lg text-center text-black mb-6 font-medium">
+          your daily manga research digest, delivered to your inbox
         </p>
 
       
@@ -172,17 +223,23 @@ export default function Home() {
               disabled={loading}
               className="px-8 py-3.5 text-base font-bold text-white bg-black hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed uppercase tracking-wider"
             >
-              {loading ? 'Subscribing...' : 'Subscribe'}
+              {loading ? 'processing...' : 'get manga digest'}
             </button>
           </div>
         </form>
 
         {/* Success Message */}
         {success && (
-          <div className="mb-6 p-4 bg-white border-3 border-black">
-            <p className="text-black text-center text-sm font-bold">
-              ✓ SUBSCRIBED! CHECK YOUR EMAIL FOR MANGA RESEARCH DIGESTS
-            </p>
+          <div className="mb-6 p-6 bg-white border-4 border-black shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+            <div className="text-center mb-3">
+              <div className="text-4xl mb-2">✓</div>
+              <p className="text-xl text-black font-bold uppercase tracking-wider mb-2">
+                manga delivered!
+              </p>
+              <p className="text-sm text-black font-medium">
+                check your inbox for your daily manga research digest
+              </p>
+            </div>
           </div>
         )}
 
@@ -288,5 +345,6 @@ export default function Home() {
         </div>
       </div>
     </div>
+    </>
   );
 }

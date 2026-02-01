@@ -1,11 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createClient } from '@supabase/supabase-js';
-
-// Initialize Supabase client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
-
-const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,62 +8,37 @@ export async function POST(request: NextRequest) {
     // Validate input
     if (!email || !topic) {
       return NextResponse.json(
-        { error: 'email and topic are required' },
+        { error: 'Email and topic are required' },
         { status: 400 }
       );
     }
 
-    // Validate email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return NextResponse.json(
-        { error: 'invalid email format' },
-        { status: 400 }
-      );
-    }
+    // Get backend URL from environment or use default
+    const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL || 'http://localhost:8000';
 
-    // Insert subscription into Supabase
-    const { data, error } = await supabase
-      .from('subscriptions')
-      .insert([
-        {
-          email: email.toLowerCase(),
-          topic: topic,
-          subscribed_at: new Date().toISOString(),
-          active: true,
-        },
-      ])
-      .select();
-
-    if (error) {
-      // Check if email already exists
-      if (error.code === '23505') {
-        // Duplicate key error
-        return NextResponse.json(
-          { error: 'email already subscribed to this topic' },
-          { status: 409 }
-        );
-      }
-
-      console.error('Supabase error:', error);
-      return NextResponse.json(
-        { error: 'failed to create subscription' },
-        { status: 500 }
-      );
-    }
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: 'subscription created successfully',
-        subscription: data[0],
+    // Call the backend subscription endpoint
+    const response = await fetch(`${backendUrl}/subscribe`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
       },
-      { status: 201 }
-    );
+      body: JSON.stringify({ email, topic }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return NextResponse.json(
+        { error: data.detail || 'Subscription failed' },
+        { status: response.status }
+      );
+    }
+
+    return NextResponse.json(data);
   } catch (error) {
     console.error('Subscription error:', error);
     return NextResponse.json(
-      { error: 'internal server error' },
+      { error: 'Internal server error' },
       { status: 500 }
     );
   }
