@@ -144,16 +144,17 @@ class ResendService:
         # Build panels HTML
         panels_html = ""
 
-        # If we have panel images, display them as images
+        # If we have panel images, display them from Supabase public URLs
         if panel_images_base64 and len(panel_images_base64) > 0:
             for i, panel_img in enumerate(panel_images_base64, 1):
-                img_base64 = panel_img['base64']
+                # Use Supabase public URL instead of base64
+                img_url = panel_img.get('url', '')
                 panels_html += f"""
                 <div style="
                     margin: 30px 0;
                     text-align: center;
                 ">
-                    <img src="data:image/png;base64,{img_base64}"
+                    <img src="{img_url}"
                          alt="Panel {i}"
                          style="
                             max-width: 100%;

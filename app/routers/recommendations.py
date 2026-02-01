@@ -52,6 +52,21 @@ async def create_recommendation(request: RecommendationRequest):
             try:
                 print(f"\nProcessing file: {file_path}")
 
+                # Check if file has already been processed, and delete old records if so
+                already_processed = await supabase_db.check_file_already_processed(
+                    request.email,
+                    request.topic,
+                    file_path
+                )
+
+                if already_processed:
+                    print(f"🔄 File already processed, deleting old records for {file_path}")
+                    await supabase_db.delete_existing_recommendation(
+                        request.email,
+                        request.topic,
+                        file_path
+                    )
+
                 # Download PDF from Supabase
                 try:
                     pdf_bytes = supabase_db.download_pdf(file_path)
@@ -101,12 +116,24 @@ async def create_recommendation(request: RecommendationRequest):
                     try:
                         # Upload image to Supabase storage
                         image_path = f"{request.email}/{request.topic}/{request.date}/figure_{figure_counter}.png"
-                        supabase_db.upload_image(
-                            image_path,
-                            pairing["image_data"],
-                            content_type="image/png"
-                        )
 
+                        try:
+                            supabase_db.upload_image(
+                                image_path,
+                                pairing["image_data"],
+                                content_type="image/png"
+                            )
+                            print(f"✓ Uploaded figure {figure_counter} to {image_path}")
+                        except Exception as upload_error:
+                            # Check if it's a duplicate error (409)
+                            error_str = str(upload_error)
+                            if "409" in error_str or "Duplicate" in error_str or "already exists" in error_str:
+                                print(f"⚠ Figure {figure_counter} already exists at {image_path}, using existing file")
+                            else:
+                                # For other errors, re-raise to skip this figure
+                                raise
+
+                        # Add to database pairings (whether new upload or existing file)
                         db_pairings.append({
                             "figure_content": pairing["figure_content"],
                             "image_path": image_path,
@@ -120,11 +147,10 @@ async def create_recommendation(request: RecommendationRequest):
                             image_url=image_url
                         ))
 
-                        print(f"✓ Uploaded figure {figure_counter} to {image_path}")
                         figure_counter += 1
 
                     except Exception as e:
-                        print(f"✗ Failed to upload figure {figure_counter}: {str(e)}")
+                        print(f"✗ Failed to process figure {figure_counter}: {str(e)}")
                         figure_counter += 1
                         continue
 

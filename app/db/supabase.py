@@ -20,6 +20,30 @@ class SupabaseDB:
         self.bucket_images = "reducto-images"
         self.bucket_panels = "panels"
 
+    async def check_file_already_processed(
+        self,
+        email: str,
+        topic: str,
+        file_name: str
+    ) -> bool:
+        """Check if a file has already been processed"""
+        result = self.client.table("recommendation_requests").select("id").eq(
+            "email", email
+        ).eq("topic", topic).eq("file_name", file_name).execute()
+
+        return len(result.data) > 0
+
+    async def delete_existing_recommendation(
+        self,
+        email: str,
+        topic: str,
+        file_name: str
+    ) -> None:
+        """Delete existing recommendation records for a file (cascade will delete pairings)"""
+        self.client.table("recommendation_requests").delete().eq(
+            "email", email
+        ).eq("topic", topic).eq("file_name", file_name).execute()
+
     async def insert_recommendation_request(
         self,
         email: str,
@@ -68,13 +92,68 @@ class SupabaseDB:
 
         return request.data[0] if request.data else None
 
+    async def get_pairings_for_path(
+        self,
+        email: str,
+        topic: str,
+        date: str,
+        max_files: int = 1
+    ) -> List[Dict[str, Any]]:
+        """
+        Get all recommendation pairings for files in a path
+
+        Returns:
+            List of dicts with 'figure_content', 'image_path', and 'image_data'
+        """
+        bucket_path = f"{email}/{topic}/{date}"
+
+        # Get all PDF files in the path
+        pdf_files = self.list_files_in_path(bucket_path)
+        if not pdf_files:
+            return []
+
+        # Limit to max_files
+        pdf_files = pdf_files[:max_files]
+
+        all_pairings = []
+
+        for file_path in pdf_files:
+            # Query recommendation_requests for this file
+            requests = self.client.table("recommendation_requests").select(
+                "id, recommendation_pairings(figure_content, image_path, reducto_data)"
+            ).eq("email", email).eq("topic", topic).eq("file_name", file_path).execute()
+
+            if requests.data:
+                for request in requests.data:
+                    pairings = request.get("recommendation_pairings", [])
+
+                    # Download image data for each pairing
+                    for pairing in pairings:
+                        try:
+                            # Download image from storage
+                            image_data = self.client.storage.from_(self.bucket_images).download(
+                                pairing["image_path"]
+                            )
+
+                            all_pairings.append({
+                                "figure_content": pairing["figure_content"],
+                                "image_path": pairing["image_path"],
+                                "image_data": image_data,
+                                "reducto_data": pairing.get("reducto_data")
+                            })
+                        except Exception as e:
+                            print(f"Warning: Could not download image {pairing['image_path']}: {e}")
+                            continue
+
+        return all_pairings
+
     def upload_image(
         self,
         image_path: str,
         image_data: bytes,
         content_type: str = "image/png"
     ) -> str:
-        """Upload image to Supabase storage and return the path"""
+        """Upload image to reducto-images bucket and return the path"""
         self.client.storage.from_(self.bucket_images).upload(
             image_path,
             image_data,
@@ -82,9 +161,28 @@ class SupabaseDB:
         )
         return image_path
 
+    def upload_panel_image(
+        self,
+        image_path: str,
+        image_data: bytes,
+        content_type: str = "image/png"
+    ) -> str:
+        """Upload panel image to panels bucket and return the path"""
+        self.client.storage.from_(self.bucket_panels).upload(
+            image_path,
+            image_data,
+            {"content-type": content_type}
+        )
+        return image_path
+
     def get_public_url(self, image_path: str) -> str:
-        """Get public URL for an image"""
+        """Get public URL for an image in reducto-images bucket"""
         result = self.client.storage.from_(self.bucket_images).get_public_url(image_path)
+        return result
+
+    def get_panel_public_url(self, image_path: str) -> str:
+        """Get public URL for a panel image in panels bucket"""
+        result = self.client.storage.from_(self.bucket_panels).get_public_url(image_path)
         return result
 
     def download_pdf(self, file_path: str) -> bytes:

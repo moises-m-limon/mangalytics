@@ -8,10 +8,8 @@ from app.models.schemas import (
     MangaGenerationResponse,
     MangaPanel
 )
-from app.services.reducto import reducto_service
 from app.services.gemini import gemini_service
 from app.services.resend_email import resend_service
-from app.services.panel_generator import panel_generator
 from app.db.supabase import supabase_db
 
 router = APIRouter(prefix="/manga", tags=["manga"])
@@ -20,13 +18,14 @@ router = APIRouter(prefix="/manga", tags=["manga"])
 @router.post("", response_model=MangaGenerationResponse)
 async def generate_manga_and_send(request: MangaGenerationRequest):
     """
-    Generate manga panels from research figures and send via email
+    Generate manga artwork from research figures and send via email
 
     This endpoint:
-    1. Fetches PDFs from Supabase storage
-    2. Extracts figures using Reducto
-    3. Generates manga narrative using Gemini (nano-banana technique)
-    4. Sends the manga digest via Resend email
+    1. Fetches figures from recommendation_pairings table (pre-processed by /recommendations)
+    2. Generates manga narrative using Gemini 2.5 Flash (nano-banana technique)
+    3. Creates actual manga artwork images using Gemini image generation model
+    4. Uploads manga images to Supabase storage
+    5. Sends the manga digest via Resend email
 
     Args:
         request: MangaGenerationRequest with email, topic, date, and optional paper_title
@@ -35,67 +34,21 @@ async def generate_manga_and_send(request: MangaGenerationRequest):
         MangaGenerationResponse with narrative, panels, and email status
     """
     try:
-        # Build the path based on email/topic/date
-        bucket_path = f"{request.email}/{request.topic}/{request.date}"
+        # Fetch figures from recommendation_pairings table instead of calling Reducto
+        print(f"🔍 Fetching figures from recommendation_pairings for {request.email}/{request.topic}/{request.date}")
 
-        print(f"🔍 Listing files in path: {bucket_path}")
-
-        # List all PDF files in the path
-        pdf_files = supabase_db.list_files_in_path(bucket_path)
-
-        if not pdf_files:
-            raise HTTPException(
-                status_code=404,
-                detail=f"No PDF files found in path: {bucket_path}"
-            )
-
-        print(f"📁 Found {len(pdf_files)} PDF files, processing first {request.max_files}")
-
-        # Limit to max_files
-        pdf_files = pdf_files[:request.max_files]
-
-        # Collect all figures from all processed PDFs
-        all_figures = []
-
-        # Process each PDF file
-        for file_path in pdf_files:
-            try:
-                print(f"\n📄 Processing file: {file_path}")
-
-                # Download PDF from Supabase
-                try:
-                    pdf_bytes = supabase_db.download_pdf(file_path)
-                except Exception as e:
-                    print(f"✗ Failed to download {file_path}: {str(e)}")
-                    continue
-
-                # Process with Reducto
-                print("🔬 Extracting figures with Reducto...")
-                try:
-                    reducto_result = await reducto_service.process_pdf(
-                        pdf_bytes,
-                        file_path
-                    )
-                    reducto_pairings = reducto_result.get("pairings", [])
-                except Exception as e:
-                    print(f"✗ Reducto processing failed for {file_path}: {str(e)}")
-                    continue
-
-                if not reducto_pairings:
-                    print(f"⚠️  No figures found in {file_path}")
-                    continue
-
-                print(f"✓ Extracted {len(reducto_pairings)} figures")
-                all_figures.extend(reducto_pairings)
-
-            except Exception as e:
-                print(f"✗ Unexpected error processing {file_path}: {str(e)}")
-                continue
+        all_figures = await supabase_db.get_pairings_for_path(
+            email=request.email,
+            topic=request.topic,
+            date=request.date,
+            max_files=request.max_files
+        )
 
         if not all_figures:
             raise HTTPException(
                 status_code=404,
-                detail="No figures could be extracted from the PDFs"
+                detail=f"No recommendation pairings found for path: {request.email}/{request.topic}/{request.date}. "
+                       f"Make sure you've run the /recommendations endpoint first to process PDFs."
             )
 
         print(f"\n🎨 Total figures collected: {len(all_figures)}")
@@ -132,23 +85,20 @@ async def generate_manga_and_send(request: MangaGenerationRequest):
             for i, panel in enumerate(panels, 1)
         ]
 
-        # Generate PNG images for each panel
-        print("🎨 Generating panel PNG images...")
+        # Generate actual manga artwork images using Gemini
+        print("🎨 Generating manga artwork with Gemini image generation...")
         panel_images = []
         panel_image_urls = []
         try:
-            import os
-            corgi_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "corgis.png")
-
-            panel_images = panel_generator.create_all_panels(
+            panel_images = await gemini_service.generate_manga_panel_images(
                 panels=panels,
-                corgi_image_path=corgi_path
+                research_figures=all_figures[:4] if len(all_figures) >= 4 else all_figures
             )
 
-            print(f"✓ Generated {len(panel_images)} panel images")
+            print(f"✓ Generated {len(panel_images)} manga artwork images")
 
         except Exception as e:
-            print(f"⚠️  Failed to generate panel images: {str(e)}")
+            print(f"⚠️  Failed to generate manga images: {str(e)}")
 
         # Upload manga panels to Supabase panels bucket
         print("📦 Uploading manga panels to Supabase...")
@@ -175,8 +125,7 @@ async def generate_manga_and_send(request: MangaGenerationRequest):
                     }
                     for p in manga_panels
                 ],
-                "figures_used": len(all_figures),
-                "processed_files": pdf_files
+                "figures_used": len(all_figures)
             }
 
             # Upload to Supabase
@@ -189,31 +138,39 @@ async def generate_manga_and_send(request: MangaGenerationRequest):
             panels_url = supabase_db.get_panels_public_url(panels_path)
             print(f"✓ Manga panels JSON saved: {panels_url}")
 
-            # Upload panel PNG images
+            # Upload panel PNG images to panels bucket
             for panel_img in panel_images:
                 try:
                     panel_num = panel_img["panel_number"]
                     img_filename = f"panel_{panel_num}.png"
                     img_path = f"{request.email}/{request.topic}/{request.date}/{img_filename}"
 
-                    supabase_db.upload_image(
-                        image_path=img_path,
-                        image_data=panel_img["image_data"],
-                        content_type="image/png"
-                    )
+                    try:
+                        supabase_db.upload_panel_image(
+                            image_path=img_path,
+                            image_data=panel_img["image_data"],
+                            content_type="image/png"
+                        )
+                        print(f"✓ Uploaded panel {panel_num} PNG to panels bucket: {img_path}")
+                    except Exception as upload_error:
+                        # Check if it's a duplicate error (409)
+                        error_str = str(upload_error)
+                        if "409" in error_str or "Duplicate" in error_str or "already exists" in error_str:
+                            print(f"⚠ Panel {panel_num} already exists in panels bucket at {img_path}, using existing file")
+                        else:
+                            # For other errors, re-raise to skip this panel
+                            raise
 
-                    # Get public URL for the panel image
-                    img_url = supabase_db.get_public_url(img_path)
+                    # Get public URL for the panel image (whether new or existing)
+                    img_url = supabase_db.get_panel_public_url(img_path)
                     panel_image_urls.append({
                         "panel_number": panel_num,
                         "url": img_url,
                         "image_data": panel_img["image_data"]
                     })
 
-                    print(f"✓ Uploaded panel {panel_num} PNG: {img_url}")
-
                 except Exception as e:
-                    print(f"✗ Failed to upload panel {panel_num} PNG: {str(e)}")
+                    print(f"✗ Failed to process panel {panel_num} PNG: {str(e)}")
                     continue
 
         except Exception as e:

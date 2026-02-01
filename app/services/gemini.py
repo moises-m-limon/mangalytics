@@ -1,5 +1,7 @@
 import os
 import google.generativeai as genai
+from google import genai as genai_new
+from google.genai import types
 from typing import List, Dict, Any
 from dotenv import load_dotenv
 import base64
@@ -16,8 +18,12 @@ class GeminiService:
         if not self.api_key:
             raise ValueError("Missing GEMINI_API_KEY")
 
+        # Old SDK for text generation
         genai.configure(api_key=self.api_key)
-        self.model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        self.model = genai.GenerativeModel('gemini-2.5-flash')
+
+        # New SDK for image generation
+        self.image_client = genai_new.Client(api_key=self.api_key)
 
     async def create_manga_panel_prompt(
         self,
@@ -213,6 +219,78 @@ Return ONLY the panel descriptions, ready to be illustrated."""
             panels.append(current_panel)
 
         return panels
+
+    async def generate_manga_panel_images(
+        self,
+        panels: List[Dict[str, str]],
+        research_figures: List[Dict[str, Any]] = None
+    ) -> List[Dict[str, Any]]:
+        """
+        Generate actual manga artwork images using Gemini 3 Pro Image (Nano Banana)
+
+        Args:
+            panels: List of panel descriptions with title, description, dialogue
+            research_figures: Optional list of research figures to incorporate
+
+        Returns:
+            List of dicts with panel info and generated image_data (bytes)
+        """
+        panel_images = []
+
+        for i, panel in enumerate(panels, 1):
+            try:
+                # Build the image generation prompt
+                prompt = f"""Generate a manga-style panel illustration in black and white with screentones.
+
+Panel {i}: {panel.get('title', '')}
+
+Scene: {panel.get('description', '')}
+"""
+
+                # Add dialogue as speech bubble instruction
+                if panel.get('dialogue'):
+                    prompt += f"\nInclude a speech bubble with text: '{panel.get('dialogue')}'\n"
+
+                prompt += """
+Style: Japanese manga, professional quality, dynamic composition, clean lines, expressive characters, dramatic angles.
+Include a friendly corgi character as the narrator/guide.
+The art should be engaging and accessible for explaining research concepts.
+"""
+
+                # Generate the image using new SDK
+                print(f"🎨 Generating manga image for panel {i}...")
+                response = self.image_client.models.generate_content(
+                    model="gemini-3-pro-image-preview",
+                    contents=prompt,
+                    config=types.GenerateContentConfig(
+                        response_modalities=["IMAGE"],
+                    )
+                )
+
+                # Extract image from response
+                image_data = None
+                for part in response.candidates[0].content.parts:
+                    if part.inline_data:
+                        image_data = part.inline_data.data
+                        break
+
+                if image_data:
+                    panel_images.append({
+                        "panel_number": i,
+                        "title": panel.get("title"),
+                        "image_data": image_data
+                    })
+                    print(f"✓ Generated manga image for panel {i} ({len(image_data)} bytes)")
+                else:
+                    print(f"⚠️  No image data in response for panel {i}")
+
+            except Exception as e:
+                print(f"✗ Failed to generate image for panel {i}: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                continue
+
+        return panel_images
 
 
 gemini_service = GeminiService()
