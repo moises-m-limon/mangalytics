@@ -227,6 +227,7 @@ Return ONLY the panel descriptions, ready to be illustrated."""
     ) -> List[Dict[str, Any]]:
         """
         Generate actual manga artwork images using Gemini 3 Pro Image (Nano Banana)
+        Incorporates research figures and corgi avatar as visual references
 
         Args:
             panels: List of panel descriptions with title, description, dialogue
@@ -237,31 +238,73 @@ Return ONLY the panel descriptions, ready to be illustrated."""
         """
         panel_images = []
 
+        # Load corgi avatar to use as visual reference
+        corgi_image = None
+        try:
+            import os
+            corgi_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "corgis.png")
+            corgi_image = Image.open(corgi_path)
+            print(f"✓ Loaded corgi avatar for visual reference")
+        except Exception as e:
+            print(f"⚠️  Could not load corgi avatar: {e}")
+
         for i, panel in enumerate(panels, 1):
             try:
-                # Build the image generation prompt
-                prompt = f"""Generate a manga-style panel illustration in black and white with screentones.
+                # Build multimodal prompt with images as priority references
+                prompt_parts = []
+
+                # 1. START WITH VISUAL REFERENCES (highest priority)
+                prompt_parts.append("VISUAL REFERENCES TO INCORPORATE:\n\n")
+
+                # Add corgi avatar as primary character reference
+                if corgi_image:
+                    prompt_parts.append("1. CORGI CHARACTER (use this exact corgi as the narrator):\n")
+                    prompt_parts.append(corgi_image)
+                    prompt_parts.append("\n")
+
+                # Add relevant research figure for this panel
+                if research_figures and i <= len(research_figures):
+                    prompt_parts.append(f"2. RESEARCH FIGURE {i} (incorporate these visuals into the manga panel):\n")
+                    try:
+                        fig_image = Image.open(BytesIO(research_figures[i-1]['image_data']))
+                        prompt_parts.append(fig_image)
+                        prompt_parts.append(f"\nFigure description: {research_figures[i-1].get('figure_content', '')}\n")
+                    except Exception as e:
+                        print(f"Warning: Could not load research figure {i}: {e}")
+                    prompt_parts.append("\n")
+
+                # 2. NOW ADD TEXT INSTRUCTIONS
+                prompt_parts.append(f"""
+MANGA PANEL GENERATION INSTRUCTIONS:
 
 Panel {i}: {panel.get('title', '')}
 
 Scene: {panel.get('description', '')}
-"""
+""")
 
                 # Add dialogue as speech bubble instruction
                 if panel.get('dialogue'):
-                    prompt += f"\nInclude a speech bubble with text: '{panel.get('dialogue')}'\n"
+                    prompt_parts.append(f"\nDialogue (in speech bubble): '{panel.get('dialogue')}'\n")
 
-                prompt += """
-Style: Japanese manga, professional quality, dynamic composition, clean lines, expressive characters, dramatic angles.
-Include a friendly corgi character as the narrator/guide.
-The art should be engaging and accessible for explaining research concepts.
-"""
+                # 3. STYLE AND COMPOSITION GUIDELINES
+                prompt_parts.append("""
+CRITICAL REQUIREMENTS:
+1. USE THE EXACT CORGI CHARACTER from the reference image as the narrator
+2. INCORPORATE visual elements from the research figure into the scene
+3. Style: Japanese manga, black and white with screentones
+4. Include speech bubbles with the dialogue text
+5. Dynamic composition with dramatic angles
+6. Professional manga quality with clean lines
 
-                # Generate the image using new SDK
-                print(f"🎨 Generating manga image for panel {i}...")
+The corgi should be explaining/pointing to elements from the research figure.
+Make the research concepts visual and accessible through manga storytelling.
+""")
+
+                # Generate the image using multimodal input
+                print(f"🎨 Generating manga image for panel {i} with visual references...")
                 response = self.image_client.models.generate_content(
                     model="gemini-3-pro-image-preview",
-                    contents=prompt,
+                    contents=prompt_parts,
                     config=types.GenerateContentConfig(
                         response_modalities=["IMAGE"],
                     )
