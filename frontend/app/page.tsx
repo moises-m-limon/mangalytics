@@ -36,7 +36,6 @@ export default function Home() {
     src: '/corgis.riv',
     animations: 'Timeline 1',
     autoplay: true,
-    loop: true,
   });
 
   // Rive animation for logo
@@ -44,7 +43,6 @@ export default function Home() {
     src: '/corgis.riv',
     animations: 'Timeline 1',
     autoplay: true,
-    loop: true,
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
